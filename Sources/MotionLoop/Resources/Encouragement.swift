@@ -10,6 +10,16 @@ enum Encouragement {
         "Small wins add up. Today's one of them.",
         "Show up for yourself today.",
         "Today's a great day to keep the streak alive.",
+        "Progress, not perfection.",
+        "Every rep counts. Let's go.",
+        "You didn't come this far to stop now.",
+        "Discipline beats motivation. Show up anyway.",
+        "Today is a fresh set of reps.",
+        "Just today. That's all you have to win.",
+        "Your future self is cheering you on.",
+        "Make today count.",
+        "Strong body, clear mind. Let's build both.",
+        "A little effort today beats a lot of regret tomorrow.",
     ]
 
     static let preActivity = [
@@ -18,6 +28,11 @@ enum Encouragement {
         "Just get started, momentum does the rest.",
         "Future you is already proud.",
         "This one's yours. Go.",
+        "You've done harder things than this.",
+        "One activity, all in.",
+        "Let's make it happen.",
+        "No excuses, just reps.",
+        "Show up. That's the whole job.",
     ]
 
     static let completion = [
@@ -28,6 +43,10 @@ enum Encouragement {
         "Boom! Done.",
         "Consistency wins. \u{1f525}",
         "You showed up. That counts.",
+        "Another one banked.",
+        "That's the way!",
+        "Look at you go!",
+        "Checked off. Well earned.",
     ]
 
     static func random(from pool: [String]) -> String {

@@ -14,9 +14,39 @@ enum ScheduleEngine {
         now: Date = .now,
         calendar: Calendar = .current
     ) throws {
+        try pruneOrphanedOccurrences(context: context, now: now, calendar: calendar)
         try reconcile(context: context, now: now)
         try generate(context: context, referenceDate: now, calendar: calendar)
         try context.save()
+    }
+
+    /// Self-healing: an occurrence whose sourceScheduleTimeID no longer matches
+    /// any live ScheduleTime was generated against a ScheduleTime row that's
+    /// since been deleted (e.g. AddEditActivityView's delete-and-recreate on
+    /// every schedule save). It's an orphan nothing will ever resolve -- by the
+    /// time reconcile() runs its window may already have auto-flipped it to
+    /// missed, so pending-only wouldn't catch it -- and generate() below will
+    /// mint a correct replacement under the new ScheduleTime, so without this
+    /// it just sits there as a duplicate forever.
+    ///
+    /// Scoped to today-or-later and never touches `.completed`: a past day's
+    /// resolved occurrence is real history (StreakCalculator reads a dayless
+    /// gap as "not scheduled" rather than "missed", so deleting an old missed
+    /// record would silently repair a broken streak).
+    private static func pruneOrphanedOccurrences(context: ModelContext, now: Date, calendar: Calendar) throws {
+        let dayStart = calendar.startOfDay(for: now)
+        let descriptor = FetchDescriptor<ExerciseOccurrence>(
+            predicate: #Predicate { $0.scheduledDate >= dayStart && $0.statusRaw != "completed" && $0.sourceScheduleTimeID != nil }
+        )
+        let candidates = try context.fetch(descriptor)
+        guard !candidates.isEmpty else { return }
+
+        let liveTimeIDs = Set(try context.fetch(FetchDescriptor<ScheduleTime>()).map(\.id))
+        for occurrence in candidates {
+            if let sourceID = occurrence.sourceScheduleTimeID, !liveTimeIDs.contains(sourceID) {
+                context.delete(occurrence)
+            }
+        }
     }
 
     private static func reconcile(context: ModelContext, now: Date) throws {

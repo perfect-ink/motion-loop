@@ -52,9 +52,11 @@ enum NotificationManager {
 
     static func atTimeIdentifier(for scheduleTimeID: UUID) -> String { "time-\(scheduleTimeID.uuidString)" }
     static func leadIdentifier(for scheduleTimeID: UUID) -> String { "time-\(scheduleTimeID.uuidString)-lead" }
+    static func halfwayIdentifier(for scheduleTimeID: UUID) -> String { "time-\(scheduleTimeID.uuidString)-halfway" }
+    static func endingSoonIdentifier(for scheduleTimeID: UUID) -> String { "time-\(scheduleTimeID.uuidString)-endingSoon" }
     static func missedIdentifier(for scheduleTimeID: UUID) -> String { "time-\(scheduleTimeID.uuidString)-missed" }
 
-    /// Up to 3 repeating UNCalendarNotificationTriggers per ScheduleTime (not
+    /// Up to 5 repeating UNCalendarNotificationTriggers per ScheduleTime (not
     /// per generated occurrence) -- iOS caps an app at 64 pending local
     /// notifications, so per-instance scheduling over a rolling horizon would
     /// break as activities grow, while weekly triggers per time stay flat and
@@ -102,6 +104,39 @@ enum NotificationManager {
                 }
 
                 if session.type == .window, let windowDurationMinutes = session.windowDurationMinutes {
+                    let halfwayMinutes = windowDurationMinutes / 2
+                    if halfwayMinutes > 0 {
+                        let halfway = ScheduleMath.addingMinutes(
+                            halfwayMinutes, toWeekday: time.weekday, hour: time.hour, minute: time.minute
+                        )
+                        let halfwayBody = session.activityIDs.count == 1
+                            ? "Halfway through the window -- still time to check in."
+                            : "Halfway through the window -- \(session.activityIDs.count) activities still to check off."
+                        addRequest(
+                            identifier: halfwayIdentifier(for: time.scheduleTimeID),
+                            weekday: halfway.weekday, hour: halfway.hour, minute: halfway.minute,
+                            title: title, body: halfwayBody, category: category,
+                            scheduleTimeID: time.scheduleTimeID, scheduleID: session.scheduleID,
+                            activityIDs: session.activityIDs, kind: "halfway", timeSensitive: false, center: center
+                        )
+                    }
+
+                    if windowDurationMinutes > 5 {
+                        let endingSoon = ScheduleMath.addingMinutes(
+                            windowDurationMinutes - 5, toWeekday: time.weekday, hour: time.hour, minute: time.minute
+                        )
+                        let endingSoonBody = session.activityIDs.count == 1
+                            ? "5 minutes left -- check in before the window closes."
+                            : "5 minutes left -- \(session.activityIDs.count) activities still to check off."
+                        addRequest(
+                            identifier: endingSoonIdentifier(for: time.scheduleTimeID),
+                            weekday: endingSoon.weekday, hour: endingSoon.hour, minute: endingSoon.minute,
+                            title: "\u{23f0} \(title)", body: endingSoonBody, category: category,
+                            scheduleTimeID: time.scheduleTimeID, scheduleID: session.scheduleID,
+                            activityIDs: session.activityIDs, kind: "endingSoon", timeSensitive: true, center: center
+                        )
+                    }
+
                     let missed = ScheduleMath.addingMinutes(
                         windowDurationMinutes, toWeekday: time.weekday, hour: time.hour, minute: time.minute
                     )

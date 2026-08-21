@@ -288,7 +288,21 @@ struct AddEditActivityView: View {
             // ScheduleTime rows are cheap and not referenced by any live
             // relationship from ExerciseOccurrence (sourceScheduleTimeID is a
             // plain UUID), so a full delete-and-recreate on every save is
-            // simpler and just as safe as diffing them.
+            // simpler than diffing them -- but any not-yet-resolved occurrence
+            // already generated against the old rows must be cleared too, or
+            // it survives as an orphan duplicate alongside the freshly
+            // regenerated one once reconcileAndGenerate runs below.
+            let oldTimeIDs = Set(schedule.times.map(\.id))
+            if !oldTimeIDs.isEmpty {
+                let pendingDescriptor = FetchDescriptor<ExerciseOccurrence>(
+                    predicate: #Predicate { $0.statusRaw == "pending" }
+                )
+                if let pendingOccurrences = try? modelContext.fetch(pendingDescriptor) {
+                    for occurrence in pendingOccurrences where occurrence.sourceScheduleTimeID.map(oldTimeIDs.contains) == true {
+                        modelContext.delete(occurrence)
+                    }
+                }
+            }
             for time in schedule.times {
                 modelContext.delete(time)
             }

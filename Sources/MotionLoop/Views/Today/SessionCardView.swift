@@ -1,11 +1,10 @@
 import SwiftUI
 
-/// Renders one session's worth of rows in Today's list. A session with
-/// exactly one activity renders as a bare TodayOccurrenceRow -- no visual
-/// change from before sessions existed. A session with several shares a
-/// caption header ("Push-ups & Crunches") so a multi-activity check-in reads
-/// as one group while each activity keeps its own independently-completable
-/// row and its own "Bonus" swipe action.
+/// Renders one session's worth of rows in Today's list -- each activity in
+/// the session keeps its own independently-completable row and its own
+/// leading swipe action -- "Complete" while it's actually completable right
+/// now, "Bonus" otherwise (upcoming, already resolved, or gap-blocked), so
+/// the swipe never offers to double-complete a live window.
 struct SessionCardView: View {
     let occurrences: [ExerciseOccurrence]
     var now: Date
@@ -14,12 +13,6 @@ struct SessionCardView: View {
     var onBonus: (ExerciseOccurrence) -> Void
 
     var body: some View {
-        if occurrences.count > 1 {
-            Text(ScheduleDisplay.sessionTitle(activityNames: occurrences.map(\.displayActivityName)))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .listRowSeparator(.hidden)
-        }
         ForEach(occurrences) { occurrence in
             TodayOccurrenceRow(
                 occurrence: occurrence,
@@ -27,7 +20,14 @@ struct SessionCardView: View {
                 onComplete: showActions ? { onComplete(occurrence) } : nil
             )
             .swipeActions(edge: .leading) {
-                if occurrence.activity != nil {
+                if CompletionService.availability(for: occurrence, now: now) == .available {
+                    Button {
+                        onComplete(occurrence)
+                    } label: {
+                        Label("Complete", systemImage: "checkmark.circle.fill")
+                    }
+                    .tint(.green)
+                } else if occurrence.activity != nil {
                     Button {
                         onBonus(occurrence)
                     } label: {

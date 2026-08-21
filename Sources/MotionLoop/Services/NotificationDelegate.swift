@@ -27,7 +27,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         if let scheduleTimeID = Self.uuid(userInfo["scheduleTimeID"]),
            let activityIDs = Self.uuids(userInfo["activityIDs"]),
            let kind = userInfo["kind"] as? String,
-           kind == "atTime" || kind == "missed" {
+           kind == "atTime" || kind == "halfway" || kind == "endingSoon" || kind == "missed" {
             let context = ModelContext(modelContainer)
             let dayStart = Calendar.current.startOfDay(for: .now)
             if let occurrences = try? Self.existingTodayOccurrences(
@@ -91,8 +91,9 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         context: ModelContext,
         dayStart: Date
     ) throws -> [ExerciseOccurrence] {
+        let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
         let descriptor = FetchDescriptor<ExerciseOccurrence>(
-            predicate: #Predicate { $0.sourceScheduleTimeID == scheduleTimeID && $0.scheduledDate >= dayStart }
+            predicate: #Predicate { $0.sourceScheduleTimeID == scheduleTimeID && $0.scheduledDate >= dayStart && $0.scheduledDate < dayEnd }
         )
         let all = try context.fetch(descriptor)
         let activityIDSet = Set(activityIDs)

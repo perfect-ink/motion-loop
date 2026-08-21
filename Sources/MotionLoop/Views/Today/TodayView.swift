@@ -13,7 +13,6 @@ struct TodayView: View {
     @State private var missedSessionSheetItem: SessionSheetItem?
 
     @State private var dailyEncouragement = Encouragement.random(from: Encouragement.daily)
-    @State private var activeEncouragement = Encouragement.random(from: Encouragement.preActivity)
     @State private var confettiTrigger = 0
     @State private var completionMessage: String?
 
@@ -57,8 +56,14 @@ struct TodayView: View {
 
     private var activeNow: [SessionGroup] { sessionsWithBuckets.filter { $0.bucket == .activeNow }.map(\.group) }
     private var upcoming: [SessionGroup] { sessionsWithBuckets.filter { $0.bucket == .upcoming }.map(\.group) }
-    private var completed: [SessionGroup] { sessionsWithBuckets.filter { $0.bucket == .completed }.map(\.group) }
-    private var missed: [SessionGroup] { sessionsWithBuckets.filter { $0.bucket == .missed }.map(\.group) }
+    /// Completed and missed sessions share one "Past" section -- both are
+    /// already-resolved, read-only history, so a separate section per outcome
+    /// just duplicated the same layout for no navigational benefit. Order
+    /// falls out of sessionsWithBuckets, which already tracks occurrences'
+    /// chronological (scheduledDate) order.
+    private var past: [SessionGroup] {
+        sessionsWithBuckets.filter { $0.bucket == .completed || $0.bucket == .missed }.map(\.group)
+    }
 
     var body: some View {
         NavigationStack {
@@ -85,10 +90,9 @@ struct TodayView: View {
 
                 anytimeSection
 
-                section("Active Now", sessions: activeNow, showActions: true, note: activeEncouragement)
+                section("Active Now", sessions: activeNow, showActions: true)
                 section("Upcoming", sessions: upcoming, showActions: false)
-                section("Completed", sessions: completed, showActions: false)
-                section("Missed", sessions: missed, showActions: false)
+                section("Past", sessions: past, showActions: false)
             }
             .navigationTitle("Today")
             .onReceive(timer) { date in
@@ -99,6 +103,7 @@ struct TodayView: View {
                 presentRoute(newValue)
             }
             .onAppear {
+                dailyEncouragement = Encouragement.random(from: Encouragement.daily)
                 presentRoute(router.pendingRoute)
             }
             .sheet(item: $sessionSheetItem) { item in
@@ -147,15 +152,9 @@ struct TodayView: View {
     }
 
     @ViewBuilder
-    private func section(_ title: String, sessions: [SessionGroup], showActions: Bool, note: String? = nil) -> some View {
+    private func section(_ title: String, sessions: [SessionGroup], showActions: Bool) -> some View {
         if !sessions.isEmpty {
             Section(title) {
-                if let note {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(.tint)
-                        .listRowSeparator(.hidden)
-                }
                 ForEach(sessions) { group in
                     SessionCardView(
                         occurrences: group.occurrences,
@@ -206,12 +205,18 @@ struct TodayView: View {
         showMessage("Bonus logged for \(activity.name)!")
     }
 
-    /// Confetti always plays on a real completion. The toast text upgrades to
-    /// the streak flame/label specifically at the moment a streak crosses into
-    /// a new StreakDisplay tier (day 3, 7, 14, 30...) rather than every single
-    /// day within a tier, so the escalation itself feels like the celebration.
+    /// Confetti plays once the whole session -- every occurrence sharing this
+    /// one's sessionID -- is completed, not on each individual activity within
+    /// a multi-activity session. Occurrences with no sessionID (freeform or
+    /// unshared) are a session of one, so they still confetti immediately.
+    /// The toast text upgrades to the streak flame/label specifically at the
+    /// moment a streak crosses into a new StreakDisplay tier (day 3, 7, 14,
+    /// 30...) rather than every single day within a tier, so the escalation
+    /// itself feels like the celebration.
     private func celebrate(for occurrence: ExerciseOccurrence) {
-        confettiTrigger += 1
+        if isSessionFullyCompleted(occurrence) {
+            confettiTrigger += 1
+        }
 
         guard let activity = occurrence.activity else {
             showMessage(Encouragement.random(from: Encouragement.completion))
@@ -230,6 +235,11 @@ struct TodayView: View {
         } else {
             showMessage(Encouragement.random(from: Encouragement.completion))
         }
+    }
+
+    private func isSessionFullyCompleted(_ occurrence: ExerciseOccurrence) -> Bool {
+        guard let sessionID = occurrence.sessionID else { return true }
+        return occurrences.filter { $0.sessionID == sessionID }.allSatisfy { $0.status == .completed }
     }
 
     private func showMessage(_ text: String) {
